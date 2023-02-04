@@ -1,0 +1,58 @@
+version: '3.9'
+networks:
+  backend:
+  traefik:
+    external: true
+volumes:
+  postgres:
+  php-socket:
+services:
+  backend: &backend-template
+    image: knb-ru-backend:latest
+    build:
+      context: './backend'
+    volumes:
+      - './backend:/app'
+      - '/app/docker'
+      - 'php-socket:/var/run/php'
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - backend
+
+  nginx:
+    image: knb-ru-nginx:latest
+    build:
+      context: './nginx'
+    volumes:
+      - './backend:/app'
+      - 'php-socket:/var/run/php'
+    depends_on:
+      - backend
+    env_file:
+      - './nginx/.env.local'
+    networks:
+      - traefik
+    labels:
+      traefik.enable: 'true'
+      traefik.http.routers.backend.rule: Host(`api.knb-ru.test`)
+      traefik.http.services.backend.loadbalancer.server.port: 80
+
+  postgres:
+    image: postgres:13.3-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: db
+    ports:
+      - '7744:5432'
+    volumes:
+      - 'postgres:/var/lib/postgresql/data'
+    networks:
+      - backend
+
+  redis:
+    image: redis:6.2.5-alpine
+    networks:
+      - backend
